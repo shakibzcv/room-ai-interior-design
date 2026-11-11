@@ -1,0 +1,22 @@
+# Directories
+node_modules
+build
+.react-router
+dist
+.idea
+.junie
+.git
+public/readme
+
+# Lock files and configuration
+package-lock.json
+bun.lock
+bun.lockb
+.env
+.env.example
+
+# Static assets
+*.svg
+*.png
+*.jpg
+*.ico
