@@ -47,6 +47,8 @@ export const links: Route.LinksFunction = () => [
   { rel: 'manifest', href: '/favicon_io/site.webmanifest' },
 ];
 
+import puter from '@heyputer/puter.js';
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -76,6 +78,11 @@ export default function App() {
 
   const refreshAuth = async () => {
     try {
+      if (typeof window !== 'undefined' && !puter.auth.isSignedIn()) {
+        setAuthState(DEFAULT_AUTH_STATE);
+        return false;
+      }
+
       const user = await getCurrentUser();
 
       setAuthState({
@@ -92,24 +99,70 @@ export default function App() {
   };
 
   useEffect(() => {
-    requestAnimationFrame(() => {
-      refreshAuth();
-    });
+    // Initial verification
+    refreshAuth();
+
+    // Listen to Puter SDK onAuth callback for reactive state updates
+    const originalOnAuth = puter.onAuth;
+    puter.onAuth = (user: any) => {
+      if (originalOnAuth) originalOnAuth(user);
+      if (user) {
+        setAuthState({
+          isSignedIn: true,
+          userName: user.username || null,
+          userId: user.uuid || null,
+        });
+      } else {
+        setAuthState(DEFAULT_AUTH_STATE);
+      }
+    };
+
+    // Listen to storage events so changes in another tab or popup sync immediately
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'puter.auth.token') {
+        refreshAuth();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+    };
   }, []);
 
   const signIn = async () => {
-    await puterSignIn();
-    return await refreshAuth();
+    try {
+      const res: any = await puterSignIn();
+      // If user details were returned directly in the sign-in payload, apply immediately
+      if (res?.user) {
+        setAuthState({
+          isSignedIn: true,
+          userName: res.user.username || null,
+          userId: res.user.uuid || null,
+        });
+      }
+      return await refreshAuth();
+    } catch (e) {
+      console.error('[RoomAI] Sign in error:', e);
+      return false;
+    }
   };
 
   const signOut = async () => {
-    puterSignOut();
-    return await refreshAuth();
+    try {
+      await puterSignOut();
+    } catch (e) {
+      console.error('[RoomAI] Sign out error:', e);
+    } finally {
+      // Instantly update UI without waiting for network
+      setAuthState(DEFAULT_AUTH_STATE);
+    }
+    return false;
   };
 
   return (
     <main className="min-h-screen bg-background text-foreground relative z-10">
-      <Outlet context={{ ...authState, refreshAuth, signIn, signOut }} />;
+      <Outlet context={{ ...authState, refreshAuth, signIn, signOut }} />
     </main>
   );
 }

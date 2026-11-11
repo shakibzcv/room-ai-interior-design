@@ -19,7 +19,7 @@ _Professional editor-style visualizer with sidebar and comparison slider._
 graph TD
     User((User)) -->|Uploads Floor Plan| Frontend[React App / React Router 7]
     Frontend -->|Authenticates| PuterAuth[Puter.js Auth]
-    Frontend -->|Invokes AI| PuterAI[Puter.ai / Gemini-2.5-flash-image-preview]
+    Frontend -->|Invokes AI| PuterAI[Puter.ai / Gemini-3.1-flash-image]
     Frontend -->|Requests Storage| PuterWorker[Puter Worker / lib/puter.worker.js]
     PuterWorker <-->|KV Store| PuterKV[Puter.js KV Storage]
     PuterWorker -->|Permanent URL| PuterHosting[Puter File Hosting]

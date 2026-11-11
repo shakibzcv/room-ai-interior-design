@@ -2,9 +2,12 @@ import puter from '@heyputer/puter.js';
 import { ROOM_AI_RENDER_PROMPT } from './constants';
 
 export const fetchAsDataUrl = async (url: string): Promise<string> => {
-  const parsedUrl = new URL(url);
-  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-    throw new Error('Only http and https protocols are allowed');
+  // blob: URLs are created locally by the SDK — fetch them directly without protocol check
+  if (!url.startsWith('blob:')) {
+    const parsedUrl = new URL(url);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      throw new Error('Only http and https protocols are allowed');
+    }
   }
 
   const controller = new AbortController();
@@ -32,6 +35,7 @@ export const fetchAsDataUrl = async (url: string): Promise<string> => {
 };
 
 export const generate3DView = async ({ sourceImage }: Generate3DViewParams) => {
+  console.log('[RoomAI] Preparing source image for generation...');
   const dataUrl = sourceImage.startsWith('data:') ? sourceImage : await fetchAsDataUrl(sourceImage);
 
   const base64Data = dataUrl.split(',')[1];
@@ -39,19 +43,44 @@ export const generate3DView = async ({ sourceImage }: Generate3DViewParams) => {
 
   if (!mimeType || !base64Data) throw new Error('Invalid source image payload');
 
-  const response = await puter.ai.txt2img(ROOM_AI_RENDER_PROMPT, {
-    provider: 'gemini',
-    model: 'gemini-2.5-flash-image-preview',
-    input_image: base64Data,
-    input_image_mime_type: mimeType,
-    ratio: { w: 1024, h: 1024 },
+  // Ensure user is signed in so Puter does not silently block on modal
+  if (!puter.auth.isSignedIn()) {
+    console.log('[RoomAI] User not authenticated in Puter, requesting sign-in...');
+    try {
+      await puter.auth.signIn();
+    } catch {
+      throw new Error('Puter authentication is required to generate 3D views. Please sign in and try again.');
+    }
+  }
+
+  console.log('[RoomAI] Calling puter.ai.txt2img with gemini-3.1-flash-image...');
+
+  // 90s safety timeout to prevent permanent UI lock
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error('Image generation timed out after 90 seconds. Please check your Puter account and try again.'));
+    }, 90000);
   });
 
-  // Safe type check for response
+  const response = await Promise.race([
+    puter.ai.txt2img(ROOM_AI_RENDER_PROMPT, {
+      model: 'gemini-3.1-flash-image',
+      input_image: base64Data,
+      input_image_mime_type: mimeType,
+    }),
+    timeoutPromise,
+  ]);
+
+  console.log('[RoomAI] puter.ai.txt2img responded:', response);
+
+  // The SDK transform returns an Image element (or plain Object in non-DOM env)
+  // with .src set to a data/blob URL. So response.src is the right field.
   const rawImageUrl =
-    typeof response === 'object' && response !== null && 'src' in response
+    response && typeof response === 'object' && 'src' in response
       ? (response as { src: string }).src
-      : null;
+      : typeof response === 'string'
+        ? response
+        : null;
 
   if (!rawImageUrl) return { renderedImage: null, renderedPath: undefined };
 
@@ -59,5 +88,6 @@ export const generate3DView = async ({ sourceImage }: Generate3DViewParams) => {
     ? rawImageUrl
     : await fetchAsDataUrl(rawImageUrl);
 
+  console.log('[RoomAI] Rendered image successfully converted to data URL');
   return { renderedImage, renderedPath: undefined };
 };

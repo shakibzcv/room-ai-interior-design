@@ -1,14 +1,25 @@
 import Logo from './Logo';
 import Button from './ui/Button';
-import { useOutletContext } from 'react-router';
+import { Link, useOutletContext } from 'react-router';
 
-const Navbar = () => {
-  const { isSignedIn, userName, signIn, signOut } = useOutletContext<AuthContext>();
+interface NavbarProps {
+  isSignedIn?: boolean;
+  userName?: string | null;
+  signIn?: () => Promise<boolean>;
+  signOut?: () => Promise<boolean>;
+}
+
+const Navbar = (props: NavbarProps = {}) => {
+  const context = useOutletContext<AuthContext>() || {};
+  const isSignedIn = props.isSignedIn ?? context.isSignedIn ?? false;
+  const userName = props.userName !== undefined ? props.userName : context.userName;
+  const signIn = props.signIn ?? context.signIn;
+  const signOut = props.signOut ?? context.signOut;
 
   const handleAuthClick = async () => {
     if (isSignedIn) {
       try {
-        await signOut();
+        if (signOut) await signOut();
       } catch (e) {
         console.error(`Puter sign out failed: ${e}`);
       }
@@ -17,7 +28,7 @@ const Navbar = () => {
     }
 
     try {
-      await signIn();
+      if (signIn) await signIn();
     } catch (e) {
       console.error(`Puter sign in failed: ${e}`);
     }
@@ -27,11 +38,11 @@ const Navbar = () => {
     <header className="navbar">
       <nav className="inner">
         <div className="left">
-          <div className="brand">
+          <Link to="/" className="brand">
             <Logo className="logo" />
 
             <span className="name">Room AI</span>
-          </div>
+          </Link>
 
           <ul className="links">
             <a href="#features">Features</a>

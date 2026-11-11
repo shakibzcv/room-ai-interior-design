@@ -15,7 +15,7 @@ import {
 import Button from '../../components/ui/Button';
 import Upload from '../../components/Upload';
 import Footer from '../../components/Footer';
-import { useNavigate } from 'react-router';
+import { useNavigate, useOutletContext } from 'react-router';
 import { useEffect, useRef, useState } from 'react';
 import { createProject, deleteProject, getProjects } from '../../lib/puter.action';
 
@@ -31,6 +31,9 @@ export function meta(_props: Route.MetaArgs) {
 
 export default function Home() {
   const navigate = useNavigate();
+  const auth = useOutletContext<AuthContext>();
+  const isSignedIn = auth?.isSignedIn ?? false;
+
   const [projects, setProjects] = useState<DesignItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const isCreatingProjectRef = useRef(false);
@@ -85,6 +88,12 @@ export default function Home() {
 
   useEffect(() => {
     const fetchProjects = async () => {
+      if (!isSignedIn) {
+        setProjects([]);
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
       const items = await getProjects();
       setProjects(items);
@@ -92,11 +101,11 @@ export default function Home() {
     };
 
     fetchProjects();
-  }, []);
+  }, [isSignedIn]);
 
   return (
     <div className="home">
-      <Navbar />
+      <Navbar {...auth} />
 
       <section className="hero">
         <div className="hero-content">
